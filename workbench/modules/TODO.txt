@@ -1,0 +1,10 @@
+programs.cfg struct
+	"program": 0
+	"name": "string",
+	"input-line": 0,
+	"output-line": 0,
+	"aux-program": 0
+program: 0-15
+input-line: 1=internal left channel, 2=internal right channel, 3=aux mono
+output-line: 1=line1, 2=line2, 3=line3, 4=line4
+aux-program: the auxiliary input device program number (sent via MIDI-OUT)

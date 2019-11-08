@@ -1,0 +1,39 @@
+~~~
+modules/						Top-level package
+	__init_.py
+	interface/					Subpackage for external interfaces
+		__init_.py
+		midi/					Subpackage for midi interface
+			__init_.py
+			midifactory.py
+			midiserial.py
+			midiusb.py
+
+		controls/				Subpackage for controls interface
+			__init_.py
+			controlsfactory.py
+			switchandledmatrix.py
+
+		display/				Subpakage for display interface
+			__init_.py
+			displayfactory.py
+			hd44780-16x2.py
+
+		os/						Subpackage for OS interface
+			__init_.py
+			filesystem.py
+			system.py
+
+		audio/					Subpackage for audio device interface
+			__init_.py
+			audiodevice.py
+
+	sound/						Subpackage for sound manager
+		__init_.py
+		soundmanager.py
+
+	preset/						Subpackage for [preset] programs manager
+		__init_.py
+		programmanager.py
+		program.py
+~~~
