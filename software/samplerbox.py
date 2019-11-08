@@ -14,12 +14,14 @@
 # CONFIG
 #########################################
 
-AUDIO_DEVICE_ID = 2                     # change this number to use another soundcard
-SAMPLES_DIR = "."                       # The root directory containing the sample-sets. Example: "/media/" to look for samples on a USB stick / SD card
+AUDIO_DEVICE_NAME = "USB Audio DAC"     # 
+AUDIO_DEVICE_ID = 0                     # change this number to use another soundcard
+SAMPLES_DIR = "/home/pi/SamplerBox"     # The root directory containing the sample-sets. Example: "/media/" to look for samples on a USB stick / SD card
 USE_SERIALPORT_MIDI = False             # Set to True to enable MIDI IN via SerialPort (e.g. RaspberryPi's GPIO UART pins)
 USE_I2C_7SEGMENTDISPLAY = False         # Set to True to use a 7-segment display via I2C
 USE_BUTTONS = False                     # Set to True to use momentary buttons (connected to RaspberryPi's GPIO pins) to change preset
-MAX_POLYPHONY = 80                      # This can be set higher, but 80 is a safe value
+USE_MATRIXSWITCH = True                 # Set to True to use momentary buttons (connected to RaspberryPi's GPIO pins) to change preset
+MAX_POLYPHONY = 32                      # This can be set higher, but 80 is a safe value
 
 
 #########################################
@@ -27,6 +29,7 @@ MAX_POLYPHONY = 80                      # This can be set higher, but 80 is a sa
 # MODULES
 #########################################
 
+import RPi.GPIO as GPIO
 import wave
 import time
 import numpy
@@ -39,6 +42,21 @@ import struct
 import rtmidi_python as rtmidi
 import samplerbox_audio
 
+
+# ---------------------------------
+# GET THE AUDIO DEVICE ID FROM NAME
+# ---------------------------------
+ii=0
+for device in sounddevice.query_devices():
+    if AUDIO_DEVICE_NAME in device['name']:
+        AUDIO_DEVICE_ID = ii
+        break
+    ii += 1
+# ---------------------------------
+print str(AUDIO_DEVICE_ID)
+
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(25, GPIO.OUT)
 
 #########################################
 # SLIGHT MODIFICATION OF PYTHON'S WAVE MODULE
@@ -166,7 +184,10 @@ sustainplayingnotes = []
 sustain = False
 playingsounds = []
 globalvolume = 10 ** (-12.0/20)  # -12dB default global volume
-globaltranspose = 0
+globaltranspose = 0 
+
+
+currentInput, currentOutput = 0, 0
 
 
 #########################################
@@ -185,6 +206,15 @@ def AudioCallback(outdata, frame_count, time_info, status):
         except:
             pass
     b *= globalvolume
+
+    if currentInput == 0 and currentOutput < 2:
+        b = b.reshape(b.size/2,2)
+        if currentOutput == 0:
+            b[:,1] = numpy.zeros(b.size/2);
+        else:
+            b[:,0] = numpy.zeros(b.size/2);
+
+
     outdata[:] = b.reshape(outdata.shape)
 
 def MidiCallback(message, time_stamp):
@@ -243,6 +273,9 @@ LoadingInterrupt = False
 def LoadSamples():
     global LoadingThread
     global LoadingInterrupt
+    global loadingVoiceFlag
+
+    loadingVoiceFlag = 1
 
     if LoadingThread:
         LoadingInterrupt = True
@@ -266,6 +299,9 @@ def ActuallyLoad():
     samples = {}
     globalvolume = 10 ** (-12.0/20)  # -12dB default global volume
     globaltranspose = 0
+    global loadingVoiceFlag
+
+    GPIO.output(25,1)
 
     samplesdir = SAMPLES_DIR if os.listdir(SAMPLES_DIR) else '.'      # use current folder (containing 0 Saw) if no user media containing samples has been found
 
@@ -343,6 +379,9 @@ def ActuallyLoad():
     else:
         print 'Preset empty: ' + str(preset)
         display("E%03d" % preset)
+   
+    GPIO.output(25,0)
+    loadingVoiceFlag = 0
 
 
 #########################################
@@ -365,37 +404,176 @@ except:
 #########################################
 
 if USE_BUTTONS:
-    import RPi.GPIO as GPIO
+    #import RPi.GPIO as GPIO
 
     lastbuttontime = 0
 
     def Buttons():
-        GPIO.setmode(GPIO.BCM)
-        GPIO.setup(18, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-        GPIO.setup(17, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+        #GPIO.setmode(GPIO.BCM)
+        GPIO.setup(26, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+        GPIO.setup(19, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+        GPIO.setup(13, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+        GPIO.setup(6, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+        GPIO.setup(5, GPIO.IN, pull_up_down=GPIO.PUD_UP)
         global preset, lastbuttontime
         while True:
             now = time.time()
-            if not GPIO.input(18) and (now - lastbuttontime) > 0.2:
+            if not GPIO.input(26) and (now - lastbuttontime) > 0.2:
                 lastbuttontime = now
-                preset -= 1
-                if preset < 0:
-                    preset = 127
+                preset = 0
                 LoadSamples()
 
-            elif not GPIO.input(17) and (now - lastbuttontime) > 0.2:
+            elif not GPIO.input(19) and (now - lastbuttontime) > 0.2:
                 lastbuttontime = now
-                preset += 1
-                if preset > 127:
-                    preset = 0
+                preset = 1
+                LoadSamples()
+
+            elif not GPIO.input(13) and (now - lastbuttontime) > 0.2:
+                lastbuttontime = now
+                preset = 2
+                LoadSamples()
+
+            elif not GPIO.input(6) and (now - lastbuttontime) > 0.2:
+                lastbuttontime = now
+                preset = 3
+                LoadSamples()
+
+            elif not GPIO.input(5) and (now - lastbuttontime) > 0.2:
+                lastbuttontime = now
+                preset = 4
                 LoadSamples()
 
             time.sleep(0.020)
+
 
     ButtonsThread = threading.Thread(target=Buttons)
     ButtonsThread.daemon = True
     ButtonsThread.start()
 
+
+#########################################
+# MATRIXSWITCH  THREAD (RASPBERRY PI GPIO)
+#
+#########################################
+if USE_MATRIXSWITCH:
+    import json
+
+    def loadPrograms(file):
+        fp = open(file, 'r')
+        jsondata = json.load(fp)
+        fp.close()
+        return jsondata
+
+    def savePrograms(jsondata, file):
+        fp = open(file, 'w')
+        json.dump(jsondata, fp, indent=4)
+        fp.close()
+
+    lastbuttontime = 0
+    matrix_columns = [21,20,26,16,19,13,12,6]
+    matrix_rows_switch = [17,27,22]
+    matrix_rows_led = [18,23,24]
+
+    # columns GPIO setup
+    for ii in range(len(matrix_columns)):
+        GPIO.setup(matrix_columns[ii], GPIO.OUT)
+        GPIO.output(matrix_columns[ii], 1)
+
+    # rows switch GPIO setup
+    for ii in range(len(matrix_rows_switch)):
+        GPIO.setup(matrix_rows_switch[ii], GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
+    # rows led GPIO setup
+    for ii in range(len(matrix_rows_led)):
+        GPIO.setup(matrix_rows_led[ii], GPIO.OUT)
+        GPIO.output(matrix_rows_led[ii], 0)
+
+
+    def MatrixScan():
+        global preset, lastbuttontime
+	global currentInput, currentOutput
+        currentColumn, currentRow = 0, 0
+
+        # load current programs routing
+        programsFile = SAMPLES_DIR + '/' + 'programs.cfg'
+        programs = loadPrograms(programsFile)
+        program = programs[0]
+        currentInput, currentOutput = program['input'], program['output']
+        prevProgram, currentProgram = 0, 0
+
+        while True:
+            now = time.time()
+ 
+            # init columns and led rows
+            for ii in range(len(matrix_columns)):
+                GPIO.output(matrix_columns[ii], 1)
+            for ii in range(len(matrix_rows_led)):
+                GPIO.output(matrix_rows_led[ii], 0)
+
+            # columns loop
+            for cc in range(len(matrix_columns)):
+                GPIO.output(matrix_columns[cc], 0)
+                for rr in range(len(matrix_rows_switch) - 1):
+                    if not GPIO.input(matrix_rows_switch[rr]) and (now - lastbuttontime) > 0.25:
+                        lastbuttontime = now
+                        currentColumn, currentRow = cc, rr
+                        #print 'function F' + str(cc + rr*len(matrix_columns))
+                        currentProgram = cc + rr*len(matrix_columns) 
+                        break
+                GPIO.output(matrix_columns[cc], 1)
+                if currentProgram != prevProgram:
+                    break
+
+            if currentProgram != prevProgram:
+                prevProgram = currentProgram
+                program = programs[currentProgram]
+                currentInput, currentOutput = program['input'], program['output']
+                preset = program['preset']
+                LoadSamples()
+
+            # current program led = ON
+            GPIO.output(matrix_columns[currentColumn], 0)
+            GPIO.output(matrix_rows_led[currentRow], 1)
+            time.sleep(0.010)
+
+
+            # routing loop
+            program = programs[currentProgram]
+            GPIO.output(matrix_columns[currentColumn], 1)
+            GPIO.output(matrix_rows_led[currentRow], 0)
+            for cc in range(len(matrix_columns)-4):
+                GPIO.output(matrix_columns[cc], 0)
+                if not GPIO.input(matrix_rows_switch[2]) and (now - lastbuttontime) > 0.25:
+                    currentOutput = cc 
+                GPIO.output(matrix_columns[cc], 1)
+            for cc in range(len(matrix_columns)-5):
+                GPIO.output(matrix_columns[7-cc], 0)
+                if not GPIO.input(matrix_rows_switch[2]) and (now - lastbuttontime) > 0.25:
+                    currentInput = cc 
+                GPIO.output(matrix_columns[7-cc], 1)
+            
+            # current program routing leds = ON
+            GPIO.output(matrix_columns[currentOutput], 0)
+            GPIO.output(matrix_columns[7-currentInput], 0)
+            GPIO.output(matrix_rows_led[2], 1)
+
+            # store program changes
+            GPIO.output(matrix_columns[4], 0)
+            if not GPIO.input(matrix_rows_switch[2]) and (now - lastbuttontime) > 0.25:
+               program['input'] = currentInput
+               program['output'] = currentOutput
+               os.system('mount -o remount,rw /')
+               savePrograms(programs, programsFile) 
+               os.system('mount -o remount,ro /')
+               time.sleep(0.5)
+            GPIO.output(matrix_columns[4], 1)
+
+            time.sleep(0.010)
+
+
+    MatrixswitchThread = threading.Thread(target=MatrixScan)
+    MatrixswitchThread.daemon = True
+    MatrixswitchThread.start()
 
 #########################################
 # 7-SEGMENT DISPLAY
@@ -462,6 +640,7 @@ if USE_SERIALPORT_MIDI:
 #
 #########################################
 
+loadingVoiceFlag = 0
 preset = 0
 LoadSamples()
 
@@ -482,3 +661,5 @@ while True:
             print 'Opened MIDI: ' + port
     previous = midi_in[0].ports
     time.sleep(2)
+
+
