@@ -1,17 +1,18 @@
 #
 # AudioRouting.py
-#           ___ _            _     ___ _   _ ___ 
-# __ ___ __/ __(_)_ __  _ __| |___| _ ) | | / __|
-# \ \ / '_ \__ \ | '  \| '_ \ / -_) _ \ |_| \__ \
-# /_\_\ .__/___/_|_|_|_| .__/_\___|___/\___/|___/
-#     |_|              |_|                       
+#  __  __         _         _ ___  _____  __
+# |  \/  |_  _ __(_)__ __ _| | _ )/ _ \ \/ /
+# | |\/| | || (_-< / _/ _` | | _ \ (_) >  < 
+# |_|  |_|\_,_/__/_\__\__,_|_|___/\___/_/\_\
 #
-# Author.....: Alessandro Fraschetti (mail: gos95@gommagomma.net)
-# Target.....: RaspberryPI
-# Version....: 1.0 2020/04/09
-# Description: python driver module for audio-routing
-# URL........: 
-# License....: Creative Commons ShareAlike 3.0 (http://creativecommons.org/licenses/by-sa/3.0/)
+# Author : Alessandro Fraschetti (mail: gos95@gommagomma.net)
+# URL    : http://www.gommagomma.net/projects/musicalbox/
+# License: Creative Commons ShareAlike 3.0 (http://creativecommons.org/licenses/by-sa/3.0/)
+# Credits: 
+# Version: 1.0 2020/04/09
+# Target : RaspberryPI
+#
+# Python driver module for hardware audio-routing
 #
 
 
