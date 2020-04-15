@@ -1,5 +1,5 @@
   VENUS:
-1. test "serio" con relay reed per routing;
+1. test "serio" con relay reed / mux analogico per routing;
 2. test "serio" con consumi in corrente e conseguente scelta se accettare alimentazione 8-15v ed inserire uno stabilizzatore a 5v, oppure accettare solo 5v
 	e se il consumo lo richiede pensare ad una ventolina di raffreddamento;
 3. progettare sch e pcb:
